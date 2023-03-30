@@ -10,6 +10,7 @@ import java.net.URL;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.github.publicLibs.freedom1b2830.awesomeio.IoUtils;
@@ -25,20 +26,39 @@ public class HttpGetToHashDigest {
 
 	private static final String USER_AGENT = "User-Agent";
 
+	public static ConcurrentMap<String, CopyOnWriteArrayList<URL>> apiGetByStrings(final String[] inputArray)
+			throws IOException, NoSuchAlgorithmException {
+		final CopyOnWriteArrayList<URL> urls = new CopyOnWriteArrayList<>();
+		for (final String urlString : inputArray) {
+			final URL url = new URL(urlString);
+			urls.addIfAbsent(url);
+		}
+		return apiGetByURLs(urls.toArray(new URL[urls.size()]));
+	}
+
+	public static ConcurrentMap<String, CopyOnWriteArrayList<URL>> apiGetByURLs(final URL[] inputArray)
+			throws IOException, NoSuchAlgorithmException {
+		final ConcurrentHashMap<String, CopyOnWriteArrayList<URL>> pairs = new ConcurrentHashMap<>();
+		for (final URL url : inputArray) {
+			final HttpURLConnection httpURLConnection = (HttpURLConnection) url.openConnection();
+			httpURLConnection.setRequestProperty(USER_AGENT, USER_AGENT_VALUE);
+			try (InputStream is = httpURLConnection.getInputStream()) {
+				final byte[] bytes = IoUtils.isToBytes(is);
+				appendMD5(bytes, url, pairs);
+				appendSHA256(bytes, url, pairs);
+			}
+		}
+		return pairs;
+	}
+
 	private static void appendMD5(final byte[] bytes, final URL url,
-			final ConcurrentHashMap<String, CopyOnWriteArrayList<URL>> pairs) throws NoSuchAlgorithmException {
+			final ConcurrentMap<String, CopyOnWriteArrayList<URL>> pairs) throws NoSuchAlgorithmException {
 		final String hashMD5String = Hashing.convertToStringUpperCase(Hashing.MD5Utils.calcMD5(bytes));
 		pairs.computeIfAbsent(hashMD5String, list -> new CopyOnWriteArrayList<>()).addIfAbsent(url);
 	}
 
-	/**
-	 * @param bytes
-	 * @param url
-	 * @param pairs
-	 * @throws NoSuchAlgorithmException
-	 */
 	private static void appendSHA256(final byte[] bytes, final URL url,
-			final ConcurrentHashMap<String, CopyOnWriteArrayList<URL>> pairs) throws NoSuchAlgorithmException {
+			final ConcurrentMap<String, CopyOnWriteArrayList<URL>> pairs) throws NoSuchAlgorithmException {
 		final String hashSHA256String = Hashing.convertToStringUpperCase(Hashing.SHA256Utils.calcSHA256(bytes));
 		final CopyOnWriteArrayList<URL> urlMapList2 = pairs.computeIfAbsent(hashSHA256String,
 				list -> new CopyOnWriteArrayList<>());
@@ -49,24 +69,11 @@ public class HttpGetToHashDigest {
 		if (args.length == 0) {
 			throw new IllegalArgumentException("need:each arg is URL");
 		}
+		final ConcurrentMap<String, CopyOnWriteArrayList<URL>> pairs = apiGetByStrings(args);
+		print(pairs);
+	}
 
-		final CopyOnWriteArrayList<URL> urls = new CopyOnWriteArrayList<>();
-		for (final String urlString : args) {
-			final URL url = new URL(urlString);
-			urls.addIfAbsent(url);
-		}
-
-		final ConcurrentHashMap<String, CopyOnWriteArrayList<URL>> pairs = new ConcurrentHashMap<>();
-		for (final URL url : urls) {
-			final HttpURLConnection httpURLConnection = (HttpURLConnection) url.openConnection();
-			httpURLConnection.setRequestProperty(USER_AGENT, USER_AGENT_VALUE);
-
-			try (InputStream is = httpURLConnection.getInputStream()) {
-				final byte[] bytes = IoUtils.isToBytes(is);
-				appendMD5(bytes, url, pairs);
-				appendSHA256(bytes, url, pairs);
-			}
-		}
+	private static void print(final ConcurrentMap<String, CopyOnWriteArrayList<URL>> pairs) {
 		for (final Entry<String, CopyOnWriteArrayList<URL>> entry : pairs.entrySet()) {
 			final String hash = entry.getKey();
 			final CopyOnWriteArrayList<URL> urlsList = entry.getValue();
@@ -74,7 +81,6 @@ public class HttpGetToHashDigest {
 				System.err.println(String.format("%s\t%s", hash, url));
 			}
 		}
-
 	}
 
 }
