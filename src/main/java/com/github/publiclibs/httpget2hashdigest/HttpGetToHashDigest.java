@@ -6,6 +6,7 @@ package com.github.publiclibs.httpget2hashdigest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.security.NoSuchAlgorithmException;
 import java.util.Map.Entry;
@@ -30,8 +31,7 @@ public class HttpGetToHashDigest {
 			throws IOException, NoSuchAlgorithmException {
 		final CopyOnWriteArrayList<URL> urls = new CopyOnWriteArrayList<>();
 		for (final String urlString : inputArray) {
-			final URL url = new URL(urlString);
-			urls.addIfAbsent(url);
+			urls.addIfAbsent(URI.create(urlString).toURL());
 		}
 		return apiGetByURLs(urls.toArray(new URL[urls.size()]));
 	}
